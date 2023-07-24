@@ -7,7 +7,7 @@
 using Eigen::MatrixXd;
 using namespace std;
 
-cv::Mat Gaussian(const cv::Mat &mat, int kernel_size = 5, int sigma = 1.0) {
+void Gaussian(const cv::Mat &src, cv::Mat &dst, int kernel_size = 5, double sigma = 1.0) {
     assert(kernel_size % 2 == 1 && kernel_size > 0);
     int k = (kernel_size - 1) / 2;
 
@@ -15,20 +15,18 @@ cv::Mat Gaussian(const cv::Mat &mat, int kernel_size = 5, int sigma = 1.0) {
     for (int i = 0; i < kernel_size; i++) {
         for (int j = 0; j <= i; j++) {
             double val =
-                    1.0 / (2 * M_PI * sigma * sigma) * exp(-((i - k) * (i - k) + (j - k) * (j - k))) / 2 / sigma /
-                    sigma;
+                    1.0 / (2 * M_PI * sigma * sigma) *
+                    exp(-((i - k) * (i - k) + (j - k) * (j - k)) / 2.0 / sigma / sigma);
             kernel[i][j] = val;
             kernel[j][i] = val;
         }
     }
 
-    cv::Mat kernel_mat(kernel_size, kernel_size, CV_64F, kernel), result;
-    cv::filter2D(mat, result, CV_32F, kernel_mat, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
-
-    return result;
+    cv::Mat kernel_mat(kernel_size, kernel_size, CV_64F, kernel);
+    cv::filter2D(src, dst, CV_32F, kernel_mat, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
 }
 
-pair<cv::Mat, cv::Mat> Sobel(const cv::Mat &mat) {
+void Sobel(const cv::Mat &src, const cv::Mat &magnitude, const cv::Mat &phase) {
     float x_kernel_data[3][3] = {{-1, 0, 1},
                                  {-2, 0, 2},
                                  {-1, 0, 1}};
@@ -37,20 +35,12 @@ pair<cv::Mat, cv::Mat> Sobel(const cv::Mat &mat) {
                                  {-1, -2, -1}};
     cv::Mat x_res, y_res, x_kernel(3, 3, CV_32F, x_kernel_data), y_kernel(3, 3, CV_32F, y_kernel_data);
 
-    cv::filter2D(mat, x_res, CV_32F, x_kernel, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
-    cv::filter2D(mat, y_res, CV_32F, y_kernel, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
+    cv::filter2D(src, x_res, CV_32F, x_kernel, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
+    cv::filter2D(src, y_res, CV_32F, y_kernel, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
 
-//    print(x_res);
-//    cout << endl;
-//    print(y_res);
-//    cout << endl;
-
-    cv::Mat mag, grad;
-    cv::magnitude(x_res, y_res, mag);
-    cv::phase(x_res, y_res, grad, true);
-    cv::subtract(grad, 360, grad, (grad > 180));
-
-    return make_pair(mag, grad);
+    cv::magnitude(x_res, y_res, magnitude);
+    cv::phase(x_res, y_res, phase, true);
+    cv::subtract(phase, 360, phase, (phase > 180));
 }
 
 void NMS(cv::Mat mag, cv::Mat grad) {
@@ -74,11 +64,10 @@ queue<pair<int, int>> DoubleThresholding(cv::Mat mat) {
     for (int i = 0; i < mat.size().height; i++) {
         for (int j = 0; j < mat.size().width; j++) {
             float val = mat.at<float>(i, j);
-            if(val > 100) {
+            if (val > 100) {
                 mat.at<float>(i, j) = 255;
                 q.push(make_pair(i, j));
-            }
-            else if(val > 30)
+            } else if (val > 30)
                 mat.at<float>(i, j) = 1;
             else
                 mat.at<float>(i, j) = 0;
@@ -89,13 +78,20 @@ queue<pair<int, int>> DoubleThresholding(cv::Mat mat) {
 }
 
 void Hysteresis(cv::Mat mat, queue<pair<int, int>> q) {
-    int directions[8][2] = {{-1, 1}, {-1, 0}, {-1, -1}, {0, 1}, {0, -1}, {1, 1}, {1, 0}, {1, -1}};
-    while(!q.empty()) {
+    int directions[8][2] = {{-1, 1},
+                            {-1, 0},
+                            {-1, -1},
+                            {0,  1},
+                            {0,  -1},
+                            {1,  1},
+                            {1,  0},
+                            {1,  -1}};
+    while (!q.empty()) {
         pair<int, int> point = q.front();
         q.pop();
-        for(auto dir : directions) {
+        for (auto dir: directions) {
             int nx = point.second + dir[1], ny = point.first + dir[0];
-            if(0 <= ny < mat.size().height && 0 <= nx < mat.size().width && mat.at<float>(ny, nx) == 1) {
+            if (0 <= ny < mat.size().height && 0 <= nx < mat.size().width && mat.at<float>(ny, nx) == 1) {
                 mat.at<float>(ny, nx) = 255;
                 q.push(make_pair(ny, nx));
             }
@@ -142,9 +138,9 @@ int main() {
     socket.send(request, zmq::send_flags::none);
 
     cv::namedWindow("original");
-    cv::namedWindow("sobel mag");
-    cv::namedWindow("nms mag");
-    cv::namedWindow("final");
+//    cv::namedWindow("sobel mag");
+//    cv::namedWindow("nms mag");
+//    cv::namedWindow("final");
 
     deque<double> frame_times;
     double start = (double) chrono::duration_cast<std::chrono::milliseconds>(
@@ -170,29 +166,30 @@ int main() {
         cv::imshow("original", img);
 
         cv::cvtColor(img, grayscale, cv::COLOR_BGR2GRAY);
+        grayscale.convertTo(grayscale, CV_32F);
+        grayscale /= 255.0;
 
-//        cv::Mat gaussian = Gaussian(grayscale);
-        cv::Mat gaussian;
-        cv::GaussianBlur(grayscale, gaussian, cv::Size(5, 5), 1);
+        cv::Mat gaussian, mag, phase;
+        Gaussian(grayscale, gaussian, 5, 1.4);
 
-        auto[mag, grad] = Sobel(gaussian);
-
-        cv::normalize(mag, disp_mag, 0, 1, cv::NORM_MINMAX);
-
-        cv::imshow("sobel mag", disp_mag);
-
-        NMS(mag, grad);
-
-        cv::normalize(mag, disp_mag, 0, 1, cv::NORM_MINMAX);
-
-        cv::imshow("nms mag", disp_mag);
-
-        auto q = DoubleThresholding(mag);
-        Hysteresis(mag, q);
-
-        cv::threshold(mag, mag, 100, 1, cv::THRESH_BINARY);
-
-        cv::imshow("final", mag);
+//        Sobel(gaussian, mag, phase);
+//
+//        cv::normalize(mag, disp_mag, 0, 1, cv::NORM_MINMAX);
+//
+//        cv::imshow("sobel mag", disp_mag);
+//
+//        NMS(mag, phase);
+//
+//        cv::normalize(mag, disp_mag, 0, 1, cv::NORM_MINMAX);
+//
+//        cv::imshow("nms mag", disp_mag);
+//
+//        auto q = DoubleThresholding(mag);
+//        Hysteresis(mag, q);
+//
+//        cv::threshold(mag, mag, 100, 1, cv::THRESH_BINARY);
+//
+//        cv::imshow("final", mag);
 
         frame_times.push_back((double) chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count() / 1000.0);
@@ -205,11 +202,4 @@ int main() {
             break;
         }
     }
-
-//    MatrixXd m(2, 2);
-//    m(0, 0) = 3;
-//    m(1, 0) = 2.5;
-//    m(0, 1) = -1;
-//    m(1, 1) = m(1, 0) + m(0, 1);
-//    std::cout << m << std::endl;
 }
