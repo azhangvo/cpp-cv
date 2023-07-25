@@ -26,7 +26,7 @@ void Gaussian(const cv::Mat &src, cv::Mat &dst, int kernel_size = 5, double sigm
     cv::filter2D(src, dst, CV_32F, kernel_mat, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
 }
 
-void Sobel(const cv::Mat &src, const cv::Mat &magnitude, const cv::Mat &phase) {
+void Sobel(const cv::Mat &src, cv::Mat &magnitude, cv::Mat &phase) {
     float x_kernel_data[3][3] = {{-1, 0, 1},
                                  {-2, 0, 2},
                                  {-1, 0, 1}};
@@ -47,13 +47,13 @@ void NMS(cv::Mat mag, cv::Mat grad) {
     for (int i = 1; i < mag.size().height - 1; i++) {
         for (int j = 1; j < mag.size().width - 1; j++) {
             float val = mag.at<float>(i, j), dir = grad.at<float>(i, j);
-            if ((dir < -67.5 || dir > 67.5) && (val <= mag.at<float>(i + 1, j) || val <= mag.at<float>(i - 1, j)))
+            if ((dir <= -67.5 || dir >= 67.5) && (val < mag.at<float>(i + 1, j) || val <= mag.at<float>(i - 1, j)))
                 mag.at<float>(i, j) = 0;
-            else if (dir < -22.5 && (val <= mag.at<float>(i + 1, j + 1) || val <= mag.at<float>(i - 1, j - 1)))
+            else if (dir <= -22.5 && (val < mag.at<float>(i + 1, j + 1) || val <= mag.at<float>(i - 1, j - 1)))
                 mag.at<float>(i, j) = 0;
-            else if (dir < 22.5 && (val <= mag.at<float>(i, j + 1) || val <= mag.at<float>(i, j - 1)))
+            else if (dir <= 22.5 && (val < mag.at<float>(i, j + 1) || val <= mag.at<float>(i, j - 1)))
                 mag.at<float>(i, j) = 0;
-            else if (val <= mag.at<float>(i + 1, j - 1) || val <= mag.at<float>(i - 1, j + 1))
+            else if (val < mag.at<float>(i + 1, j - 1) || val <= mag.at<float>(i - 1, j + 1))
                 mag.at<float>(i, j) = 0;
         }
     }
@@ -138,7 +138,8 @@ int main() {
     socket.send(request, zmq::send_flags::none);
 
     cv::namedWindow("original");
-//    cv::namedWindow("sobel mag");
+    cv::namedWindow("sobel mag");
+    cv::namedWindow("sobel mag cv");
 //    cv::namedWindow("nms mag");
 //    cv::namedWindow("final");
 
@@ -172,17 +173,13 @@ int main() {
         cv::Mat gaussian, mag, phase;
         Gaussian(grayscale, gaussian, 5, 1.4);
 
-//        Sobel(gaussian, mag, phase);
-//
-//        cv::normalize(mag, disp_mag, 0, 1, cv::NORM_MINMAX);
-//
-//        cv::imshow("sobel mag", disp_mag);
-//
-//        NMS(mag, phase);
-//
-//        cv::normalize(mag, disp_mag, 0, 1, cv::NORM_MINMAX);
-//
-//        cv::imshow("nms mag", disp_mag);
+        Sobel(gaussian, mag, phase);
+
+        cv::imshow("sobel mag", mag);
+
+        NMS(mag, phase);
+
+        cv::imshow("nms mag", mag);
 //
 //        auto q = DoubleThresholding(mag);
 //        Hysteresis(mag, q);
