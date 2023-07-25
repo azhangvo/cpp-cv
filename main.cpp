@@ -26,7 +26,7 @@ void Gaussian(const cv::Mat &src, cv::Mat &dst, int kernel_size = 5, double sigm
     cv::filter2D(src, dst, CV_32F, kernel_mat, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
 }
 
-void Sobel(const cv::Mat &src, cv::Mat &magnitude, cv::Mat &phase) {
+void Sobel(const cv::Mat &src, cv::Mat &magnitude, cv::Mat &phase, bool l2grad = false) {
     float x_kernel_data[3][3] = {{-1, 0, 1},
                                  {-2, 0, 2},
                                  {-1, 0, 1}};
@@ -38,14 +38,10 @@ void Sobel(const cv::Mat &src, cv::Mat &magnitude, cv::Mat &phase) {
     cv::filter2D(src, x_res, CV_32F, x_kernel, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
     cv::filter2D(src, y_res, CV_32F, y_kernel, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
 
-//    cout << "dx" << endl;
-//    print(x_res);
-//    cout << endl << "dy" << endl;
-//    print(y_res);
-//    cout << endl;
-
-//    cv::magnitude(x_res, y_res, magnitude);
-    magnitude = abs(x_res) + abs(y_res);
+    if (l2grad)
+        cv::magnitude(x_res, y_res, magnitude);
+    else
+        magnitude = abs(x_res) + abs(y_res);
     cv::phase(x_res, y_res, phase, true);
     cv::subtract(phase, 360, phase, (phase > 180));
 }
@@ -142,14 +138,14 @@ int main() {
 //    print(grad_test);
 //    cout << endl;
 //
-////    cv::Sobel(test_mat, cv_sobel_out, -1, 1, 0);
-////    cout << "dx" << endl;
-////    print(cv_sobel_out);
-////    cout << endl;
-////    cv::Sobel(test_mat, cv_sobel_out, -1, 0, 1);
-////    cout << "dy" << endl;
-////    print(cv_sobel_out);
-////    cout << endl;
+//    cv::Sobel(test_mat, cv_sobel_out, -1, 1, 0);
+//    cout << "dx" << endl;
+//    print(cv_sobel_out);
+//    cout << endl;
+//    cv::Sobel(test_mat, cv_sobel_out, -1, 0, 1);
+//    cout << "dy" << endl;
+//    print(cv_sobel_out);
+//    cout << endl;
 //
 //    cv::resize(test_mat, test_mat, cv::Size(900, 900), 0, 0, cv::INTER_NEAREST);
 //
@@ -182,11 +178,17 @@ int main() {
     socket.send(request, zmq::send_flags::none);
 
     cv::namedWindow("original");
-    cv::namedWindow("sobel mag");
-    cv::namedWindow("nms mag");
+//    cv::namedWindow("sobel mag");
+//    cv::namedWindow("nms mag");
 //    cv::namedWindow("dbl thresh");
     cv::namedWindow("final");
+    cv::namedWindow("config");
     cv::namedWindow("truth");
+
+    int low = 40, high = 80;
+
+    cv::createTrackbar("low", "config", &low, 100);
+    cv::createTrackbar("high", "config", &high, 100);
 
     deque<double> frame_times;
     double start = (double) chrono::duration_cast<std::chrono::milliseconds>(
@@ -210,7 +212,7 @@ int main() {
         cv::Mat img = cv::imdecode(cv::Mat(1, reply.size(), CV_8UC1, buf),
                                    cv::IMREAD_UNCHANGED), grayscale, disp_mag;
 
-        cv::imshow("original", img);
+//        cv::imshow("original", img);
 
         cv::cvtColor(img, grayscale, cv::COLOR_BGR2GRAY);
         grayscale.convertTo(grayscale, CV_32F);
@@ -221,13 +223,13 @@ int main() {
 
         Sobel(grayscale, mag, phase);
 
-        cv::imshow("sobel mag", mag);
+//        cv::imshow("sobel mag", mag);
 
         NMS(mag, phase);
 
-        cv::imshow("nms mag", mag);
+//        cv::imshow("nms mag", mag);
 
-        auto q = DoubleThresholding(mag);
+        auto q = DoubleThresholding(mag, low / 100.0, high / 100.0);
 
 //        cv::imshow("dbl thresh", mag);
         Hysteresis(mag, q);
