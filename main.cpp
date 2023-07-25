@@ -1,10 +1,8 @@
 #include <iostream>
-#include <Eigen/Dense>
 #include <zmq.hpp>
 #include <opencv2/opencv.hpp>
 #include <chrono>
 
-using Eigen::MatrixXd;
 using namespace std;
 
 void Gaussian(const cv::Mat &src, cv::Mat &dst, int kernel_size = 5, double sigma = 1.0) {
@@ -43,26 +41,26 @@ void Sobel(const cv::Mat &src, cv::Mat &magnitude, cv::Mat &phase, bool l2grad =
     else
         magnitude = abs(x_res) + abs(y_res);
     cv::phase(x_res, y_res, phase, true);
-    cv::subtract(phase, 360, phase, (phase > 180));
+    cv::subtract(phase, 180, phase, (phase > 90));
+    cv::subtract(phase, 180, phase, (phase > 90));
 }
 
 void NMS(cv::Mat mag, cv::Mat grad) {
     for (int i = 1; i < mag.size().height - 1; i++) {
         for (int j = 1; j < mag.size().width - 1; j++) {
             float val = mag.at<float>(i, j), dir = grad.at<float>(i, j);
-//            cout << j << " " << i << " " << val << " " << dir << endl;
-            if ((dir <= -67.5 || dir >= 67.5) && (val < mag.at<float>(i + 1, j) || val < mag.at<float>(i - 1, j))) {
+            if ((dir <= -67.5 || dir >= 67.5) && (val <= mag.at<float>(i + 1, j) || val < mag.at<float>(i - 1, j))) {
                 mag.at<float>(i, j) = 0;
 //                cout << "Zeroed out 0" << endl;
             } else if ((dir > -67.5 && dir <= -22.5) &&
-                       (val < mag.at<float>(i + 1, j + 1) || val < mag.at<float>(i - 1, j - 1))) {
+                       (val <= mag.at<float>(i + 1, j + 1) || val < mag.at<float>(i - 1, j - 1))) {
                 mag.at<float>(i, j) = 0;
 //                cout << "Zeroed out 1" << endl;
-            } else if (dir > -22.5 && dir <= 22.5 && (val < mag.at<float>(i, j + 1) || val < mag.at<float>(i, j - 1))) {
+            } else if (dir > -22.5 && dir <= 22.5 && (val <= mag.at<float>(i, j + 1) || val < mag.at<float>(i, j - 1))) {
                 mag.at<float>(i, j) = 0;
 //                cout << "Zeroed out 2" << endl;
             } else if ((dir > 22.5 && dir < 67.5) &&
-                       (val < mag.at<float>(i + 1, j - 1) || val < mag.at<float>(i - 1, j + 1))) {
+                       (val <= mag.at<float>(i + 1, j - 1) || val < mag.at<float>(i - 1, j + 1))) {
                 mag.at<float>(i, j) = 0;
 //                cout << "Zeroed out 3" << endl;
             }
@@ -70,7 +68,7 @@ void NMS(cv::Mat mag, cv::Mat grad) {
     }
 }
 
-queue<pair<int, int>> DoubleThresholding(cv::Mat mat, double low = 0.15, double high = 0.6) {
+queue<pair<int, int>> DoubleThresholding(cv::Mat mat, double low = 0.4, double high = 0.8) {
     queue<pair<int, int>> q;
     for (int i = 0; i < mat.size().height; i++) {
         for (int j = 0; j < mat.size().width; j++) {
@@ -219,9 +217,9 @@ int main() {
         grayscale /= 255.0;
 
         cv::Mat gaussian, mag, phase;
-        Gaussian(grayscale, gaussian, 5, 1);
+        Gaussian(grayscale, gaussian, 5, 1.4);
 
-        Sobel(grayscale, mag, phase);
+        Sobel(gaussian, mag, phase);
 
 //        cv::imshow("sobel mag", mag);
 
