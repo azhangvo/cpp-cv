@@ -217,9 +217,9 @@ int main() {
         grayscale /= 255.0;
 
         cv::Mat gaussian, mag, phase;
-        Gaussian(grayscale, gaussian, 5, 1.4);
+//        Gaussian(grayscale, gaussian, 5, 1.4);
 
-        Sobel(gaussian, mag, phase);
+        Sobel(grayscale, mag, phase);
 
 //        cv::imshow("sobel mag", mag);
 
