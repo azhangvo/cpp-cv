@@ -38,7 +38,14 @@ void Sobel(const cv::Mat &src, cv::Mat &magnitude, cv::Mat &phase) {
     cv::filter2D(src, x_res, CV_32F, x_kernel, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
     cv::filter2D(src, y_res, CV_32F, y_kernel, cv::Point(-1, -1), 0, cv::BORDER_DEFAULT);
 
-    cv::magnitude(x_res, y_res, magnitude);
+//    cout << "dx" << endl;
+//    print(x_res);
+//    cout << endl << "dy" << endl;
+//    print(y_res);
+//    cout << endl;
+
+//    cv::magnitude(x_res, y_res, magnitude);
+    magnitude = abs(x_res) + abs(y_res);
     cv::phase(x_res, y_res, phase, true);
     cv::subtract(phase, 360, phase, (phase > 180));
 }
@@ -47,27 +54,35 @@ void NMS(cv::Mat mag, cv::Mat grad) {
     for (int i = 1; i < mag.size().height - 1; i++) {
         for (int j = 1; j < mag.size().width - 1; j++) {
             float val = mag.at<float>(i, j), dir = grad.at<float>(i, j);
-            if ((dir <= -67.5 || dir >= 67.5) && (val < mag.at<float>(i + 1, j) || val <= mag.at<float>(i - 1, j)))
+//            cout << j << " " << i << " " << val << " " << dir << endl;
+            if ((dir <= -67.5 || dir >= 67.5) && (val < mag.at<float>(i + 1, j) || val < mag.at<float>(i - 1, j))) {
                 mag.at<float>(i, j) = 0;
-            else if (dir <= -22.5 && (val < mag.at<float>(i + 1, j + 1) || val <= mag.at<float>(i - 1, j - 1)))
+//                cout << "Zeroed out 0" << endl;
+            } else if ((dir > -67.5 && dir <= -22.5) &&
+                       (val < mag.at<float>(i + 1, j + 1) || val < mag.at<float>(i - 1, j - 1))) {
                 mag.at<float>(i, j) = 0;
-            else if (dir <= 22.5 && (val < mag.at<float>(i, j + 1) || val <= mag.at<float>(i, j - 1)))
+//                cout << "Zeroed out 1" << endl;
+            } else if (dir > -22.5 && dir <= 22.5 && (val < mag.at<float>(i, j + 1) || val < mag.at<float>(i, j - 1))) {
                 mag.at<float>(i, j) = 0;
-            else if (val < mag.at<float>(i + 1, j - 1) || val <= mag.at<float>(i - 1, j + 1))
+//                cout << "Zeroed out 2" << endl;
+            } else if ((dir > 22.5 && dir < 67.5) &&
+                       (val < mag.at<float>(i + 1, j - 1) || val < mag.at<float>(i - 1, j + 1))) {
                 mag.at<float>(i, j) = 0;
+//                cout << "Zeroed out 3" << endl;
+            }
         }
     }
 }
 
-queue<pair<int, int>> DoubleThresholding(cv::Mat mat) {
+queue<pair<int, int>> DoubleThresholding(cv::Mat mat, double low = 0.15, double high = 0.6) {
     queue<pair<int, int>> q;
     for (int i = 0; i < mat.size().height; i++) {
         for (int j = 0; j < mat.size().width; j++) {
             float val = mat.at<float>(i, j);
-            if (val > 100) {
+            if (val > high) {
                 mat.at<float>(i, j) = 255;
                 q.push(make_pair(i, j));
-            } else if (val > 30)
+            } else if (val > low)
                 mat.at<float>(i, j) = 1;
             else
                 mat.at<float>(i, j) = 0;
@@ -91,7 +106,8 @@ void Hysteresis(cv::Mat mat, queue<pair<int, int>> q) {
         q.pop();
         for (auto dir: directions) {
             int nx = point.second + dir[1], ny = point.first + dir[0];
-            if (0 <= ny < mat.size().height && 0 <= nx < mat.size().width && mat.at<float>(ny, nx) == 1) {
+            if (0 <= ny && ny < mat.size().height && 0 <= nx && nx < mat.size().width &&
+                mat.at<float>(ny, nx) == 1) {
                 mat.at<float>(ny, nx) = 255;
                 q.push(make_pair(ny, nx));
             }
@@ -100,26 +116,54 @@ void Hysteresis(cv::Mat mat, queue<pair<int, int>> q) {
 }
 
 int main() {
-//    int test[3][3] = {{0, 0, 255},
-//                      {0, 1, 0},
-//                      {0, 0, 0}};
-//    cv::Mat test_mat(3, 3, CV_8U, test);
+//    float test[5][5] = {{0.5, 0.8, 0.9, 1,   1},
+//                        {0.2, 0.5, 0.8, 0.9, 1},
+//                        {0.1, 0.2, 0.5, 0.8, 0.9},
+//                        {0,   0.1, 0.2, 0.5, 0.8},
+//                        {0,   0,   0.1, 0.2, 0.5}};
+////    float test[5][5] = {{1,   1,   1,   1,   1},
+////                        {0.9, 0.9, 0.9, 0.9, 0.9},
+////                        {0.5, 0.5, 0.5, 0.5, 0.5},
+////                        {0.1, 0.1, 0.1, 0.1, 0.1},
+////                        {0,   0,   0,   0,   0}};
+//    cv::Mat test_mat(5, 5, CV_32F, test), mag_test, grad_test, cv_sobel_out;
 //
+//    cv::flip(test_mat, test_mat, 0);
+//
+//    cout << "Mat" << endl;
 //    print(test_mat);
 //    cout << endl;
 //
-//    auto[mag_test, grad_test] = Sobel(test_mat);
+//    Sobel(test_mat, mag_test, grad_test);
 //
+//    cout << "Mag" << endl;
 //    print(mag_test);
-//    cout << endl;
+//    cout << endl << "Grad" << endl;
 //    print(grad_test);
 //    cout << endl;
 //
-//    cv::resize(test_mat, test_mat, cv::Size(900, 900));
+////    cv::Sobel(test_mat, cv_sobel_out, -1, 1, 0);
+////    cout << "dx" << endl;
+////    print(cv_sobel_out);
+////    cout << endl;
+////    cv::Sobel(test_mat, cv_sobel_out, -1, 0, 1);
+////    cout << "dy" << endl;
+////    print(cv_sobel_out);
+////    cout << endl;
+//
+//    cv::resize(test_mat, test_mat, cv::Size(900, 900), 0, 0, cv::INTER_NEAREST);
 //
 //    imshow("Test", test_mat);
 //
+//    NMS(mag_test, grad_test);
+//
+//    cout << "NMS mag" << endl;
+//    print(mag_test);
+//    cout << endl;
+//
 //    cv::waitKey(0);
+//
+//    return 0;
 
     zmq::context_t context(1);
     zmq::socket_t socket(context, ZMQ_PAIR);
@@ -139,9 +183,10 @@ int main() {
 
     cv::namedWindow("original");
     cv::namedWindow("sobel mag");
-    cv::namedWindow("sobel mag cv");
-//    cv::namedWindow("nms mag");
-//    cv::namedWindow("final");
+    cv::namedWindow("nms mag");
+//    cv::namedWindow("dbl thresh");
+    cv::namedWindow("final");
+    cv::namedWindow("truth");
 
     deque<double> frame_times;
     double start = (double) chrono::duration_cast<std::chrono::milliseconds>(
@@ -162,7 +207,8 @@ int main() {
 
         char *buf = static_cast<char *>(reply.data());
 
-        cv::Mat img = cv::imdecode(cv::Mat(1, reply.size(), CV_8UC1, buf), cv::IMREAD_UNCHANGED), grayscale, disp_mag;
+        cv::Mat img = cv::imdecode(cv::Mat(1, reply.size(), CV_8UC1, buf),
+                                   cv::IMREAD_UNCHANGED), grayscale, disp_mag;
 
         cv::imshow("original", img);
 
@@ -171,22 +217,29 @@ int main() {
         grayscale /= 255.0;
 
         cv::Mat gaussian, mag, phase;
-        Gaussian(grayscale, gaussian, 5, 1.4);
+        Gaussian(grayscale, gaussian, 5, 1);
 
-        Sobel(gaussian, mag, phase);
+        Sobel(grayscale, mag, phase);
 
         cv::imshow("sobel mag", mag);
 
         NMS(mag, phase);
 
         cv::imshow("nms mag", mag);
-//
-//        auto q = DoubleThresholding(mag);
-//        Hysteresis(mag, q);
-//
-//        cv::threshold(mag, mag, 100, 1, cv::THRESH_BINARY);
-//
-//        cv::imshow("final", mag);
+
+        auto q = DoubleThresholding(mag);
+
+//        cv::imshow("dbl thresh", mag);
+        Hysteresis(mag, q);
+
+        cv::threshold(mag, mag, 100, 1, cv::THRESH_BINARY);
+
+        cv::imshow("final", mag);
+
+        cv::Mat canny_truth;
+        cv::cvtColor(img, grayscale, cv::COLOR_BGR2GRAY);
+        cv::Canny(grayscale, canny_truth, 100, 200);
+        cv::imshow("truth", canny_truth);
 
         frame_times.push_back((double) chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count() / 1000.0);
